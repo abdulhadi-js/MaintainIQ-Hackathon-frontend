@@ -1,4 +1,5 @@
 # MaintainIQ Frontend
+[![Deploy Frontend to AWS S3](https://github.com/abdulhadi-js/MaintainIQ-Hackathon-frontend/actions/workflows/deploy.yml/badge.svg)](https://github.com/abdulhadi-js/MaintainIQ-Hackathon-frontend/actions/workflows/deploy.yml)
 
 The frontend user interface for MaintainIQ, designed to provide a seamless, mobile-responsive experience for public users scanning QR codes, and powerful administrative tools for technicians and supervisors. 
 
