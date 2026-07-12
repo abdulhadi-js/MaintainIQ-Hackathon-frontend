@@ -6,29 +6,33 @@ on:
       - main
 
 env:
-  AWS_REGION: us-east-1 # Change if needed
+  AWS_REGION: us-east-1
+  S3_BUCKET: maintainiq-frontend-928535088880
+  # API Gateway URL from the deployed CloudFormation stack
+  VITE_API_URL: https://hetzgddgi1.execute-api.us-east-1.amazonaws.com
 
 jobs:
   build-and-deploy:
-    name: Build and Deploy to S3
+    name: Build Vite App & Deploy to S3
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci
+        # Use npm install instead of npm ci to avoid lock file sync errors
+        run: npm install
 
       - name: Build Vite App
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_API_URL: ${{ env.VITE_API_URL }}
         run: npm run build
 
       - name: Configure AWS Credentials
@@ -38,11 +42,38 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get AWS Account ID
-        id: aws-account
+      - name: Ensure S3 Static Website Hosting is Enabled
         run: |
-          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+          # Delete block public access
+          aws s3api delete-public-access-block \
+            --bucket ${{ env.S3_BUCKET }} \
+            --region ${{ env.AWS_REGION }}
+
+          # Apply public-read bucket policy
+          aws s3api put-bucket-policy \
+            --bucket ${{ env.S3_BUCKET }} \
+            --region ${{ env.AWS_REGION }} \
+            --policy '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Sid": "PublicReadGetObject",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::${{ env.S3_BUCKET }}/*"
+              }]
+            }'
+
+          # Enable static website hosting
+          aws s3 website s3://${{ env.S3_BUCKET }}/ \
+            --index-document index.html \
+            --error-document index.html
 
       - name: Deploy to S3 Bucket
         run: |
-          aws s3 sync dist/ s3://maintainiq-frontend-${{ env.ACCOUNT_ID }}/ --delete
+          aws s3 sync dist/ s3://${{ env.S3_BUCKET }}/ \
+            --delete \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ Frontend deployed successfully!"
+          echo "🌐 Live URL: http://${{ env.S3_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
